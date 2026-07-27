@@ -18,6 +18,7 @@ class MainViewModel(QObject):
     status_updated = Signal(str)
     connection_state_changed = Signal(bool)        # True = connected
     offline_data_ready = Signal(object, object)     # (x, y) for matplotlib
+    signal_time_updated = Signal(float)             # elapsed signal time in seconds
  
     RMS_WINDOW = 50        # samples (~25ms at 2000Hz)
     FILTER_WINDOW = 5      # samples, moving average
@@ -117,6 +118,8 @@ class MainViewModel(QObject):
         to the current mode, and emits it to the View.
         """
         self.model.receive_data()
+        self.signal_time_updated.emit(self.model.get_signal_time_seconds())
+
         if not self.model.has_data():
             return
  

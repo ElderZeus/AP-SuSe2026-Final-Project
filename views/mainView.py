@@ -3,6 +3,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QMainWindow,
     QPushButton,
+    QSpinBox,
     QVBoxLayout,
     QHBoxLayout,
     QWidget,
@@ -49,6 +50,11 @@ class MainView(QMainWindow):
         control_layout = QVBoxLayout()
         control_layout.setSpacing(8)
 
+        self.port_label = QLabel("Port")
+        self.port_input = QSpinBox()
+        self.port_input.setRange(1, 65535)
+        self.port_input.setValue(self.view_model.model.port)
+
         self.y_scale_label = QLabel("Y scale")
         self.y_scale_input = QDoubleSpinBox()
         self.y_scale_input.setRange(0.01, 100000.0)
@@ -59,6 +65,8 @@ class MainView(QMainWindow):
         self.info_label = QLabel("Start the TCP server first.")
         self.toggle_button = QPushButton("Start Plotting")
 
+        control_layout.addWidget(self.port_label)
+        control_layout.addWidget(self.port_input)
         control_layout.addWidget(self.y_scale_label)
         control_layout.addWidget(self.y_scale_input)
         control_layout.addStretch()
@@ -81,18 +89,19 @@ class MainView(QMainWindow):
 
         self.view_model.plot_updated.connect(self.plot_widget.update_plot)
         self.view_model.status_updated.connect(self.info_label.setText)
+        self.view_model.connection_state_changed.connect(self.update_connection_state)
         self.view_model.signal_time_updated.connect(self.update_signal_time)
         self.view_model.signal_time_updated.connect(self.plot_widget.set_signal_time)
 
     def toggle_plotting(self):
         if self.view_model.is_plotting:
-            self.view_model.stop_plotting()
-            self.toggle_button.setText("Start Plotting")
+            self.view_model.disconnect_from_server()
         else:
-            self.view_model.start_plotting()
+            self.view_model.connect_to_server(self.port_input.value())
 
-            if self.view_model.is_plotting:
-                self.toggle_button.setText("Stop Plotting")
+    def update_connection_state(self, connected):
+        self.toggle_button.setText("Stop Plotting" if connected else "Start Plotting")
+        self.port_input.setEnabled(not connected)
 
     def update_signal_time(self, signal_time_seconds):
         self.time_label.setText(f"Signal time: {signal_time_seconds:.2f} s")

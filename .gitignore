@@ -1,2 +1,6 @@
 __pycache__/
 *.pyc
+
+# Local-only, not for GitHub
+CLAUDE.md
+.claude/

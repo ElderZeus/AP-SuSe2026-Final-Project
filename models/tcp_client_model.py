@@ -49,6 +49,10 @@ class TcpClientModel:
         self.byte_buffer = bytearray()
         self.data_buffer = np.empty((self.channels, 0), dtype=self.dtype)
 
+        # Unlike data_buffer, this is never trimmed. It holds the entire
+        # recording since connect() so it can be inspected offline later.
+        self.full_data_buffer = np.empty((self.channels, 0), dtype=self.dtype)
+
         # Counts how many samples were received in total.
         # This is used to calculate the signal time.
         self.total_samples_received = 0
@@ -123,6 +127,10 @@ class TcpClientModel:
             (self.data_buffer, new_data),
             axis=1,
         )
+        self.full_data_buffer = np.concatenate(
+            (self.full_data_buffer, new_data),
+            axis=1,
+        )
 
         # Count all received samples.
         # new_data.shape[1] is the number of new samples per channel.
@@ -149,6 +157,32 @@ class TcpClientModel:
         x = np.arange(number_of_samples) / self.sampling_rate
 
         return x, y
+
+    def get_full_recording(self, channel_id):
+        """
+        Return x and y data for the full recorded signal of one channel.
+
+        Unlike get_window(), this is not limited to the rolling live window
+        and includes every sample received since connect().
+        """
+        y = self.full_data_buffer[channel_id, :]
+
+        number_of_samples = y.shape[0]
+        x = np.arange(number_of_samples) / self.sampling_rate
+
+        return x, y
+
+    def get_all_channels_window(self):
+        """
+        Return x and y data for all channels within the current rolling window.
+
+        x is the same relative time axis as get_window().
+        y is the full (channels, samples) matrix for the live window.
+        """
+        number_of_samples = self.data_buffer.shape[1]
+        x = np.arange(number_of_samples) / self.sampling_rate
+
+        return x, self.data_buffer
 
     def get_signal_time_seconds(self):
         """
