@@ -88,7 +88,7 @@ You'll know it worked because your shell prompt will be prefixed with `(.venv)`.
 pip install -r requirements.txt
 ```
 
-This pulls in numpy, scipy, matplotlib, PySide6, and VisPy — everything the app needs.
+This pulls in numpy, matplotlib, PySide6, and VisPy — everything the app needs.
 
 **5. Run it**
 
