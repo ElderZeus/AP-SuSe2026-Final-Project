@@ -4,16 +4,11 @@ import numpy as np
 
 class TcpClientModel:
     """
-    Simple TCP client model for receiving EMG data.
-
-    Expected server data:
-    - 32 channels
-    - 18 samples per packet
-    - float64 values
-    - raw bytes sent with current_window.tobytes()
-
-    The model stores a rolling 10-second buffer.
-    Older samples are removed when new samples arrive.
+    TCP client model for receiving EMG data: reassembles the raw float64 byte
+    stream (server sends current_window.tobytes()) into
+    (channels, samples_per_packet) packets. Keeps a rolling window_seconds
+    buffer for live plotting and a separate untrimmed buffer for offline
+    inspection.
     """
 
     def __init__(
@@ -53,12 +48,9 @@ class TcpClientModel:
         # recording since connect() so it can be inspected offline later.
         self.full_data_buffer = np.empty((self.channels, 0), dtype=self.dtype)
 
-        # Counts how many samples were received in total.
-        # This is used to calculate the signal time.
         self.total_samples_received = 0
 
     def connect(self):
-        """Connect to the TCP server."""
         if self.is_connected:
             return
 
@@ -71,7 +63,6 @@ class TcpClientModel:
         self.is_connected = True
 
     def disconnect(self):
-        """Close the TCP connection."""
         self.is_connected = False
 
         if self.socket is not None:
@@ -80,11 +71,9 @@ class TcpClientModel:
 
     def receive_data(self):
         """
-        Receive all currently available TCP data.
-
-        TCP is a byte stream. This means one recv() call does not necessarily
-        contain exactly one packet. Therefore, we first collect bytes and then
-        extract complete packets of the expected size.
+        TCP is a byte stream: one recv() call may not contain exactly one
+        packet, so we first collect bytes, then extract complete packets of
+        the expected size.
         """
         if not self.is_connected or self.socket is None:
             return
@@ -100,13 +89,11 @@ class TcpClientModel:
                 self.byte_buffer.extend(new_bytes)
 
             except BlockingIOError:
-                # No more data is available right now.
                 break
 
         self._extract_packets_from_buffer()
 
     def _extract_packets_from_buffer(self):
-        """Convert complete byte packets into NumPy arrays."""
         packets = []
 
         while len(self.byte_buffer) >= self.packet_size_bytes:
@@ -132,25 +119,16 @@ class TcpClientModel:
             axis=1,
         )
 
-        # Count all received samples.
-        # new_data.shape[1] is the number of new samples per channel.
         self.total_samples_received += new_data.shape[1]
 
-        # Keep only the newest 10 seconds for plotting.
         if self.data_buffer.shape[1] > self.window_size:
             self.data_buffer = self.data_buffer[:, -self.window_size:]
 
     def has_data(self):
-        """Return True if enough data is available for plotting."""
         return self.data_buffer.shape[1] >= 2
 
     def get_window(self):
-        """
-        Return x and y data for plotting.
-
-        x is a relative time axis for the visible rolling window.
-        y is one selected EMG channel.
-        """
+        """x/y for the current rolling window: x in seconds, y is the selected channel."""
         y = self.data_buffer[self.selected_channel, :]
 
         number_of_samples = y.shape[0]
@@ -159,12 +137,8 @@ class TcpClientModel:
         return x, y
 
     def get_full_recording(self, channel_id):
-        """
-        Return x and y data for the full recorded signal of one channel.
-
-        Unlike get_window(), this is not limited to the rolling live window
-        and includes every sample received since connect().
-        """
+        """Full-recording counterpart to get_window() - x/y for the entire
+        recording since connect(), not just the rolling window."""
         y = self.full_data_buffer[channel_id, :]
 
         number_of_samples = y.shape[0]
@@ -173,25 +147,13 @@ class TcpClientModel:
         return x, y
 
     def get_all_channels_window(self):
-        """
-        Return x and y data for all channels within the current rolling window.
-
-        x is the same relative time axis as get_window().
-        y is the full (channels, samples) matrix for the live window.
-        """
+        """x/y for all channels within the current rolling window; y is the
+        full (channels, samples) matrix."""
         number_of_samples = self.data_buffer.shape[1]
         x = np.arange(number_of_samples) / self.sampling_rate
 
         return x, self.data_buffer
 
     def get_signal_time_seconds(self):
-        """
-        Return the signal time in seconds.
-
-        Formula:
-            signal_time = total_samples_received / sampling_rate
-
-        This is equivalent to:
-            signal_time = number_of_chunks * samples_per_packet / sampling_rate
-        """
+        """Signal time in seconds: total_samples_received / sampling_rate."""
         return self.total_samples_received / self.sampling_rate

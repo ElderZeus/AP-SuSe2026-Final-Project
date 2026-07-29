@@ -6,15 +6,13 @@ from processing.signal_processing import process_signal
  
 class MainViewModel(QObject):
     """
-    ViewModel for the live plotting view.
-    - connects/disconnects the TCP model
-    - polls for new data on a QTimer
-    - tracks selected channel, signal mode, and plot-all-channels toggle
-    - runs processing on the data before sending it to the View
+    ViewModel for live plotting and offline inspection: connects/disconnects
+    the TCP model, polls it on a QTimer, applies the current signal mode, and
+    emits Qt signals driving both the live plot and the offline Matplotlib view.
     """
  
     plot_updated = Signal(object, object)          # (x, y) single channel
-    all_channels_updated = Signal(object)          # list of 32 processed channel arrays
+    all_channels_updated = Signal(object, object)  # (x, list of 32 processed channel arrays)
     status_updated = Signal(str)
     connection_state_changed = Signal(bool)        # True = connected
     offline_data_ready = Signal(object, object)     # (x, y) for matplotlib
@@ -38,14 +36,13 @@ class MainViewModel(QObject):
  
         self.is_plotting = False
         self.selected_channel = 1
-        self.mode = "original"           # "original" | "rms" | "filtered"
+        self.mode = "original"
         self.show_all_channels = False
  
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_plot)
  
     def connect_to_server(self, port: int):
-        """Connect to the server on the given port and start updating the plot."""
         if self.is_plotting:
             return
         self.model.port = port
@@ -61,7 +58,6 @@ class MainViewModel(QObject):
         self.timer.start(10)
  
     def disconnect_from_server(self):
-        """Stop updating the plot and close the TCP connection."""
         if not self.is_plotting:
             return
         self.timer.stop()
@@ -71,7 +67,6 @@ class MainViewModel(QObject):
         self.connection_state_changed.emit(False)
  
     def set_channel(self, channel_index: int):
-        """Called when the channel dropdown changes."""
         if channel_index < 0 or channel_index >= self.model.channels:
             self.status_updated.emit(f"Invalid channel: {channel_index}")
             return
@@ -79,30 +74,28 @@ class MainViewModel(QObject):
         self.model.selected_channel = channel_index
  
     def set_mode(self, mode: str):
-        """Called when the user switches between original/rms/filtered."""
         if mode not in ("original", "rms", "filtered"):
             self.status_updated.emit(f"Invalid signal mode: {mode}")
             return
         self.mode = mode
  
     def set_plot_all_channels(self, enabled: bool):
-        """Called when the "Plot All Channels" button is toggled."""
         self.show_all_channels = enabled
- 
+
     def request_offline_plot(self):
-        """
-        Called by the View to switch to offline (matplotlib) inspection.
-        Stops live streaming if still connected, pulls the full recorded
-        buffer for the selected channel, processes it with the current
-        mode, and emits it for the offline view.
- 
-        Assumes TcpClientModel exposes a method to get the full recorded
-        signal for a channel (not just the rolling live window) - confirm
-        the exact method name/shape with whoever owns the model.
-        """
+        """Switch to offline (matplotlib) inspection: stop live streaming if
+        connected, then pull, process, and emit the full recorded buffer for
+        the selected channel."""
         if self.is_plotting:
             self.disconnect_from_server()
- 
+
+        if self.model.full_data_buffer.shape[1] == 0:
+            self.status_updated.emit(
+                "No recorded data yet - connect and stream before inspecting offline."
+            )
+            self.offline_data_ready.emit(None, None)
+            return
+
         x, y = self.model.get_full_recording(self.selected_channel)
         y_processed = process_signal(
             y,
@@ -113,10 +106,6 @@ class MainViewModel(QObject):
         self.offline_data_ready.emit(x, y_processed)
  
     def update_plot(self):
-        """
-        Called on every timer tick. Pulls new data, processes it according
-        to the current mode, and emits it to the View.
-        """
         self.model.receive_data()
         self.signal_time_updated.emit(self.model.get_signal_time_seconds())
 
@@ -139,7 +128,6 @@ class MainViewModel(QObject):
         self.plot_updated.emit(x, y_processed)
  
     def _emit_all_channels(self):
-        # needs model.get_all_channels_window() -> (x, Y) with Y shape (32, n_samples)
         x, channel_matrix = self.model.get_all_channels_window()
  
         processed_channels = []
@@ -152,6 +140,6 @@ class MainViewModel(QObject):
             )
             offset_signal = processed + i * self.CHANNEL_OFFSET
             processed_channels.append(offset_signal)
- 
-        self.all_channels_updated.emit(processed_channels)
+
+        self.all_channels_updated.emit(x, processed_channels)
  

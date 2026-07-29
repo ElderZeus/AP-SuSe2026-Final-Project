@@ -1,0 +1,44 @@
+CHANGELOG
+=========
+
+Added
+-----
+- Channel selector (0-31) in the main window, wired to live channel switching.
+- Signal mode dropdown (original / rms / filtered) in the main window,
+  applied to both the live plot and the offline view.
+- "Plot All Channels" view: all 32 channels rendered at once with a fixed
+  vertical offset and channel labels (views/allChannelsPlotView.py,
+  AllChannelsPlotWidget), toggled from the main window.
+- Offline inspection window (views/offlineView.py, OfflineInspectionView):
+  Matplotlib-based view of the full recorded signal after streaming stops,
+  with its own channel/mode controls and a manual refresh button.
+- "Auto Scale Y" toggle for the live single-channel plot: continuously fits
+  the Y axis to the visible signal instead of relying only on the manual
+  Y scale field.
+
+Fixed
+-----
+- Offline inspection no longer crashes when requested before any data has
+  been recorded (previously raised an error when "filtered" mode ran over
+  an empty buffer); it now shows a friendly "no recorded data yet" message.
+
+Changed
+-------
+- all_channels_updated signal now carries the time axis alongside the
+  per-channel data, so the all-channels view can render a moving time axis.
+- Reviewed and trimmed comments/docstrings across the model, viewmodel, and
+  view files: removed ones that only restated the code, fixed a few that had
+  gone stale, and shortened others that were longer than needed.
+- README updated with RMS/filter parameter documentation and usage
+  instructions for channel/mode switching, Plot All Channels, and offline
+  inspection.
+
+Removed
+-------
+- Stray empty views/plotView file (leftover, not used by the app).
+- .vscode/settings.json (personal editor configuration, not needed to run
+  or grade the project).
+
+Repository
+----------
+- .gitignore now also excludes .venv/ and .vscode/.

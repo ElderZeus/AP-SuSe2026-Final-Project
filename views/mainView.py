@@ -1,29 +1,26 @@
 from PySide6.QtWidgets import (
+    QComboBox,
     QDoubleSpinBox,
     QLabel,
     QMainWindow,
     QPushButton,
     QSpinBox,
+    QStackedWidget,
     QVBoxLayout,
     QHBoxLayout,
     QWidget,
 )
 
 from views.plotView import VisPyPlotWidget
+from views.allChannelsPlotView import AllChannelsPlotWidget
+from views.offlineView import OfflineInspectionView
 
 
 class MainView(QMainWindow):
     """
-    Main application window.
-
-    The View owns the visible widgets:
-    - signal time label
-    - y-scale input
-    - plot widget
-    - start/stop button
-
-    The View does not receive TCP data directly.
-    It only connects ViewModel signals to visible widgets.
+    Main application window. Owns the visible widgets and wires ViewModel
+    signals to them; the only direct reads of the underlying TcpClientModel
+    are for sizing widgets (initial port value, channel count).
     """
 
     def __init__(self, view_model):
@@ -62,6 +59,26 @@ class MainView(QMainWindow):
         self.y_scale_input.setSingleStep(50.0)
         self.y_scale_input.setDecimals(2)
 
+        self.auto_scale_button = QPushButton("Auto Scale Y")
+        self.auto_scale_button.setCheckable(True)
+
+        self.channel_label = QLabel("Channel")
+        self.channel_input = QSpinBox()
+        self.channel_input.setRange(0, max(0, self.view_model.model.channels - 1))
+        self.channel_input.setValue(self.view_model.selected_channel)
+
+        self.mode_label = QLabel("Signal mode")
+        self.mode_input = QComboBox()
+        self.mode_input.addItems(["original", "rms", "filtered"])
+        mode_index = self.mode_input.findText(self.view_model.mode)
+        if mode_index >= 0:
+            self.mode_input.setCurrentIndex(mode_index)
+
+        self.all_channels_button = QPushButton("Plot All Channels")
+        self.all_channels_button.setCheckable(True)
+
+        self.offline_button = QPushButton("Offline Inspection")
+
         self.info_label = QLabel("Start the TCP server first.")
         self.toggle_button = QPushButton("Start Plotting")
 
@@ -69,6 +86,13 @@ class MainView(QMainWindow):
         control_layout.addWidget(self.port_input)
         control_layout.addWidget(self.y_scale_label)
         control_layout.addWidget(self.y_scale_input)
+        control_layout.addWidget(self.auto_scale_button)
+        control_layout.addWidget(self.channel_label)
+        control_layout.addWidget(self.channel_input)
+        control_layout.addWidget(self.mode_label)
+        control_layout.addWidget(self.mode_input)
+        control_layout.addWidget(self.all_channels_button)
+        control_layout.addWidget(self.offline_button)
         control_layout.addStretch()
         control_layout.addWidget(self.info_label)
         control_layout.addWidget(self.toggle_button)
@@ -77,27 +101,62 @@ class MainView(QMainWindow):
             visible_duration_seconds=10.0,
             y_scale=self.y_scale_input.value(),
         )
+        self.all_channels_widget = AllChannelsPlotWidget(
+            num_channels=self.view_model.model.channels,
+            channel_offset=self.view_model.CHANNEL_OFFSET,
+        )
+
+        self.plot_stack = QStackedWidget()
+        self.plot_stack.addWidget(self.plot_widget)
+        self.plot_stack.addWidget(self.all_channels_widget)
+
+        self.offline_view = OfflineInspectionView(self.view_model, self)
 
         content_layout.addLayout(control_layout, stretch=0)
-        content_layout.addWidget(self.plot_widget, stretch=1)
+        content_layout.addWidget(self.plot_stack, stretch=1)
 
         main_layout.addWidget(self.time_label)
         main_layout.addLayout(content_layout)
 
         self.toggle_button.clicked.connect(self.toggle_plotting)
         self.y_scale_input.valueChanged.connect(self.plot_widget.set_y_scale)
+        self.channel_input.valueChanged.connect(self.view_model.set_channel)
+        self.mode_input.currentTextChanged.connect(self.view_model.set_mode)
+        self.all_channels_button.toggled.connect(self.toggle_all_channels)
+        self.offline_button.clicked.connect(self.show_offline_view)
+        self.auto_scale_button.toggled.connect(self.toggle_auto_scale)
 
         self.view_model.plot_updated.connect(self.plot_widget.update_plot)
+        self.view_model.all_channels_updated.connect(self.all_channels_widget.update_all_channels)
         self.view_model.status_updated.connect(self.info_label.setText)
         self.view_model.connection_state_changed.connect(self.update_connection_state)
         self.view_model.signal_time_updated.connect(self.update_signal_time)
         self.view_model.signal_time_updated.connect(self.plot_widget.set_signal_time)
+        self.view_model.signal_time_updated.connect(self.all_channels_widget.set_signal_time)
 
     def toggle_plotting(self):
         if self.view_model.is_plotting:
             self.view_model.disconnect_from_server()
         else:
             self.view_model.connect_to_server(self.port_input.value())
+
+    def toggle_all_channels(self, checked):
+        self.view_model.set_plot_all_channels(checked)
+        self.plot_stack.setCurrentIndex(1 if checked else 0)
+        self.all_channels_button.setText(
+            "Show Single Channel" if checked else "Plot All Channels"
+        )
+
+    def toggle_auto_scale(self, checked):
+        self.plot_widget.set_auto_scale(checked)
+        self.y_scale_input.setEnabled(not checked)
+        if not checked:
+            self.plot_widget.set_y_scale(self.y_scale_input.value())
+
+    def show_offline_view(self):
+        self.offline_view.show()
+        self.offline_view.raise_()
+        self.offline_view.activateWindow()
 
     def update_connection_state(self, connected):
         self.toggle_button.setText("Stop Plotting" if connected else "Start Plotting")

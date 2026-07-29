@@ -2,7 +2,7 @@ import numpy as np
  
  
 def get_channel_data(data: np.ndarray, channel_id: int) -> np.ndarray:
-    """Get the samples for one channel out of the full (channels, samples) array."""
+    """Channel slice from a (channels, samples) array; passes 1D data through unchanged."""
     if data.ndim == 1:
         return data
     return data[channel_id, :]
@@ -40,7 +40,6 @@ def process_signal(
     rms_window: int = 50,
     filter_window: int = 5,
 ) -> np.ndarray:
-    """Apply original / rms / filtered processing depending on the current mode."""
     if mode == "original":
         return data
     elif mode == "rms":

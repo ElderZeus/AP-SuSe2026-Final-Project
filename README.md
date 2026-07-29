@@ -61,4 +61,79 @@ This will install packages such as numpy, scipy, matplotlib, PySide6, and vispy 
 
 Make sure you are inside the activated virtual environment whenever you run the application or install new dependencies.
 
-I can access, hakunamata
+## Connecting to the TCP server
+
+1. Start the provided TCP server (from Exercise 5) on the machine/port you want to stream from.
+2. Enter the server's port in the **Port** field (top-left of the window).
+3. Click **Start Plotting** to connect. Streaming starts automatically on a successful connection;
+   the button switches to **Stop Plotting** and the status label confirms the connection.
+4. If the server isn't running, the wrong port is entered, or the connection drops mid-stream, a
+   status message is shown instead of the app crashing (see `MainViewModel.connect_to_server`).
+5. Click **Stop Plotting** to disconnect. Disconnecting does not discard the recording — the full
+   signal received so far remains available for offline inspection until the app is closed.
+
+## Live plot, channel selection, and signal modes
+
+- The main view plots one selected channel at a time in a rolling 10-second VisPy window, with
+  visible axes and moving time labels.
+- Use the **Channel** spin box to switch which of the 32 channels is displayed live.
+- Use the **Signal mode** dropdown to switch between:
+  - `original` — the raw signal, unprocessed.
+  - `rms` — a rolling RMS (root-mean-square) envelope, window size `RMS_WINDOW = 50` samples
+    (~25 ms at the server's 2000 Hz sampling rate).
+  - `filtered` — a moving-average low-pass filter, window size `FILTER_WINDOW = 5` samples.
+  Both parameters are defined as class constants on `MainViewModel` (`viewmodels/mainViewModel.py`)
+  and apply identically to the live view, the all-channels view, and the offline view.
+- Use the **Y scale** field to adjust the live plot's vertical amplitude scaling.
+
+## Plot All Channels
+
+Click **Plot All Channels** to switch the main view to an overview of all 32 channels at once,
+stacked vertically with a fixed offset between them so each channel's activity stays readable.
+Channel labels are shown to the left of the plot. Click the button again (now labeled
+**Show Single Channel**) to return to the single-channel live view. Both views share the same
+rolling time window, signal mode, and moving time axis.
+
+## Offline inspection (Matplotlib)
+
+Click **Offline Inspection** to open a separate window for inspecting the *entire* recorded signal
+(not just the rolling live window) with Matplotlib. This works whether streaming is currently active
+(it will be stopped automatically), already stopped, or was never started at all.
+
+- Use the **Channel** and **Mode** controls in that window to pick what to inspect; the plot
+  refreshes automatically on each change, and a **Refresh** button re-pulls the latest recording
+  (useful if you've streamed more data since opening the window).
+- If no data has been recorded yet, the window shows a friendly message instead of an empty or
+  broken plot.
+- The offline view and the live view share the same channel/mode selection state, so switching
+  channel or mode in one is reflected in the other.
+
+## Error handling
+
+The application avoids crashing on common problems, including: a server that isn't running, a wrong
+port, a lost connection mid-stream, an invalid channel index, an invalid signal mode, and requesting
+an offline plot before any data has been recorded. In each case a status message is shown in the GUI
+(`status_updated`) instead of raising an unhandled exception.
+
+## Project structure (MVVM)
+
+- `models/tcp_client_model.py` — `TcpClientModel`: owns the raw TCP socket, reassembles the byte
+  stream into fixed-size packets, and maintains both a rolling live-window buffer and an untrimmed
+  full-recording buffer for offline use. Contains no Qt/GUI code.
+- `processing/signal_processing.py` — pure NumPy signal processing (`compute_rms`, `apply_filter`,
+  `process_signal`), used identically by the live, all-channels, and offline paths.
+- `viewmodels/mainViewModel.py` — `MainViewModel(QObject)`: polls the model on a timer, applies the
+  selected signal mode, and exposes Qt signals/slots that the views bind to
+  (`plot_updated`, `all_channels_updated`, `offline_data_ready`, `status_updated`,
+  `connection_state_changed`, `signal_time_updated`). Holds UI-facing state such as the selected
+  channel, mode, and plot-all-channels toggle.
+- `views/mainView.py` — `MainView(QMainWindow)`: the main window; wires GUI controls to the
+  ViewModel and never touches `TcpClientModel` directly.
+- `views/plotView.py` — `VisPyPlotWidget`: live single-channel VisPy plot with axes and moving
+  time-tick labels.
+- `views/allChannelsPlotView.py` — `AllChannelsPlotWidget`: live VisPy overview of all 32 channels,
+  stacked with a fixed vertical offset.
+- `views/offlineView.py` — `OfflineInspectionView`: Matplotlib-based dialog for offline inspection
+  of the full recorded signal, with channel/mode controls.
+- `main.py` — entry point: constructs `MainViewModel`, passes it into `MainView`, runs the Qt event
+  loop.

@@ -6,27 +6,22 @@ import math
 
 class VisPyPlotWidget(QWidget):
     """
-    Minimal VisPy plot widget.
+    Minimal VisPy plot widget: signal line, axes, and moving time-tick
+    labels over a fixed-width rolling window (visible_duration_seconds).
 
-    It draws:
-    - one signal line
-    - one x-axis line at the lower y-limit
-    - one y-axis line at x = 0
-    - moving time labels on the x-axis
-
-    The visible plot window is always 10 seconds wide.
-
-    Important:
-    The time labels move from right to left from the very beginning.
-    That means the visible signal-time range is allowed to start below 0
-    during the first seconds.
+    Time labels move right-to-left from the start, so the visible
+    signal-time range is allowed to go negative during the first seconds.
     """
+
+    _AUTO_SCALE_PADDING = 1.2    # 20% headroom above the visible peak
+    _AUTO_SCALE_MIN_FLOOR = 1.0  # prevents the axis collapsing on a flat/zero signal
 
     def __init__(self, visible_duration_seconds=10.0, y_scale=300.0):
         super().__init__()
 
         self.visible_duration_seconds = visible_duration_seconds
         self.y_scale = y_scale
+        self.auto_scale = False
 
         self.current_signal_time = 0.0
         self.time_tick_step = 5.0
@@ -104,10 +99,17 @@ class VisPyPlotWidget(QWidget):
         self._update_time_ticks()
         self._update_camera()
 
+    def set_auto_scale(self, enabled):
+        """Toggle continuous Y-axis auto-scaling; a pure flag flip that does
+        not itself restore the manual scale when disabled."""
+        self.auto_scale = bool(enabled)
+
+    def _compute_auto_y_scale(self, y):
+        """Half-height that fits the visible signal, with headroom and a floor."""
+        peak = float(np.max(np.abs(y))) if y.size else 0.0
+        return max(peak * self._AUTO_SCALE_PADDING, self._AUTO_SCALE_MIN_FLOOR)
+
     def set_signal_time(self, signal_time_seconds):
-        """
-        Receive the current signal time from the ViewModel.
-        """
         self.current_signal_time = float(signal_time_seconds)
         self._update_time_ticks()
 
@@ -120,11 +122,10 @@ class VisPyPlotWidget(QWidget):
 
         newest_time = x[-1]
 
-        # During the first seconds, the signal should also enter from the right.
-        # Therefore, we do not stretch the visible signal to fill the whole plot.
+        # Anchor the newest sample to the window's right edge instead of
+        # stretching to fill it, so the signal enters from the right early on.
         display_x = x - newest_time + self.visible_duration_seconds
 
-        # Only keep points that are currently inside the visible window.
         keep = (display_x >= 0.0) & (display_x <= self.visible_duration_seconds)
         display_x = display_x[keep]
         y = y[keep]
@@ -135,7 +136,10 @@ class VisPyPlotWidget(QWidget):
         pos = np.column_stack((display_x, y))
         self.signal_line.set_data(pos=pos)
 
-        self._update_camera()
+        if self.auto_scale:
+            self.set_y_scale(self._compute_auto_y_scale(y))
+        else:
+            self._update_camera()
 
     def _update_axes(self):
         y_min = -self.y_scale
@@ -157,29 +161,10 @@ class VisPyPlotWidget(QWidget):
 
     def _update_time_ticks(self):
         """
-        Update moving tick labels.
-
-        The visible time range is:
-
-            current_signal_time - visible_duration_seconds
-            to
-            current_signal_time
-
-        This is intentionally NOT clamped to zero.
-
-        Example with a 10 s window:
-
-            current_signal_time = 1
-            visible range = -9 ... 1
-            label 0 appears near the right side
-
-            current_signal_time = 5
-            visible range = -5 ... 5
-            labels 0 and 5 are visible
-
-            current_signal_time = 12
-            visible range = 2 ... 12
-            labels 5 and 10 are visible and moving left
+        Update moving tick labels for the visible window
+        [current_signal_time - visible_duration_seconds, current_signal_time],
+        intentionally not clamped to zero (e.g. at current_signal_time=1 the
+        range is -9..1, so tick 0 sits near the right edge).
         """
         y_min = -self.y_scale
 
@@ -197,8 +182,7 @@ class VisPyPlotWidget(QWidget):
         while tick_time <= visible_end_time + self.time_tick_step:
             display_x = tick_time - visible_start_time
 
-            # We only show non-negative time labels.
-            # Their positions still move continuously from right to left.
+            # Only non-negative time labels are shown.
             if tick_time >= 0.0 and 0.0 <= display_x <= self.visible_duration_seconds:
                 tick_values.append((tick_time, display_x))
 
