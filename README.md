@@ -1,6 +1,7 @@
-# group details:
-group 13
-Team members: Maria, Hector, Lina
+# Working group details
+Group 13
+Team members: Maria, Hector Gutierrez, Lina.
+The work showed on the following repo, was done and distributed in equal parts, divided in several in person sessions of work. Testing of the different sets of features was assisted by in person work, and the collaborative use of the LLM "Claude".
 
 # TCP-Signal Visualization App
 
@@ -45,7 +46,7 @@ You'll need Python 3.12 and Git.
 **1. Clone the repository**
 
 ```
-git clone <your-repo-url>
+git clone https://github.com/ElderZeus/AP-SuSe2026-Final-Project.git
 cd <your-repo-folder>
 ```
 
@@ -101,7 +102,7 @@ Just make sure the virtual environment is active whenever you run the app or ins
 
 Once the app is open, connecting to a running server is meant to be quick:
 
-1. Start the TCP server (the one from Exercise 5) on whichever machine and port you're streaming
+1. Start the TCP server on whichever machine and port you're streaming
    from.
 2. Type that port into the **Port** field in the top-left of the window. It defaults to `12345`,
    which is also what the app tries first if you don't change it. Once you're connected, this field
