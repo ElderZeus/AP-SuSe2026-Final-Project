@@ -2,6 +2,13 @@ import socket
 import numpy as np
 
 
+class InvalidDataError(ValueError):
+    """Raised when bytes received on the socket decode into non-finite
+    (NaN/Inf) values - a sign the source at this host/port isn't actually
+    sending the expected float64 (channels, samples_per_packet) signal
+    stream, rather than a transient glitch in otherwise-valid data."""
+
+
 class TcpClientModel:
     """
     TCP client model for receiving EMG data: reassembles the raw float64 byte
@@ -109,6 +116,16 @@ class TcpClientModel:
             return
 
         new_data = np.concatenate(packets, axis=1)
+
+        if not np.isfinite(new_data).all():
+            # Whatever is on this port, it isn't sending valid float64
+            # signal data - stop here rather than plotting garbage or
+            # letting NaN/Inf propagate into downstream processing/plotting.
+            self.disconnect()
+            raise InvalidDataError(
+                "Received non-numeric (NaN/Inf) values decoding the byte "
+                "stream as float64 signal data."
+            )
 
         self.data_buffer = np.concatenate(
             (self.data_buffer, new_data),

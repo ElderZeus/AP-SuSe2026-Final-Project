@@ -23,6 +23,10 @@ class MainView(QMainWindow):
     are for sizing widgets (initial port value, channel count).
     """
 
+    Y_SCALE_MIN = 0.01
+    Y_SCALE_MAX = 100000.0
+    Y_SCALE_DEFAULT = 300.0
+
     def __init__(self, view_model):
         super().__init__()
 
@@ -54,8 +58,12 @@ class MainView(QMainWindow):
 
         self.y_scale_label = QLabel("Y scale")
         self.y_scale_input = QDoubleSpinBox()
-        self.y_scale_input.setRange(0.01, 100000.0)
-        self.y_scale_input.setValue(300.0)
+        # Deliberately wider than Y_SCALE_MIN/MAX: QDoubleSpinBox would
+        # otherwise silently clamp an out-of-range value to the nearest
+        # boundary on its own, before _validate_y_scale ever gets a look at
+        # it - which would defeat the "reset to default" behavior below.
+        self.y_scale_input.setRange(-1_000_000.0, 1_000_000.0)
+        self.y_scale_input.setValue(self.Y_SCALE_DEFAULT)
         self.y_scale_input.setSingleStep(50.0)
         self.y_scale_input.setDecimals(2)
 
@@ -120,6 +128,7 @@ class MainView(QMainWindow):
 
         self.toggle_button.clicked.connect(self.toggle_plotting)
         self.y_scale_input.valueChanged.connect(self.plot_widget.set_y_scale)
+        self.y_scale_input.editingFinished.connect(self._validate_y_scale)
         self.channel_input.valueChanged.connect(self.view_model.set_channel)
         self.mode_input.currentTextChanged.connect(self.view_model.set_mode)
         self.all_channels_button.toggled.connect(self.toggle_all_channels)
@@ -152,6 +161,15 @@ class MainView(QMainWindow):
         self.y_scale_input.setEnabled(not checked)
         if not checked:
             self.plot_widget.set_y_scale(self.y_scale_input.value())
+
+    def _validate_y_scale(self):
+        """Reset the Y scale field to its default once the user commits
+        (Enter / focus-out) a value outside [Y_SCALE_MIN, Y_SCALE_MAX],
+        rather than leaving whatever out-of-range number they typed in
+        place."""
+        value = self.y_scale_input.value()
+        if not (self.Y_SCALE_MIN <= value <= self.Y_SCALE_MAX):
+            self.y_scale_input.setValue(self.Y_SCALE_DEFAULT)
 
     def show_offline_view(self):
         self.offline_view.show()
