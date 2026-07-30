@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+
+# Editor-specific, not for GitHub
+.vscode/
+
+# Local-only, not for GitHub
+CLAUDE.md
+.claude/
