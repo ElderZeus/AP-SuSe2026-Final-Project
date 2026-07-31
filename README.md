@@ -195,6 +195,24 @@ signal mode, and asking for an offline plot before anything's been recorded. In 
 cases, what you get is a status message in the GUI (via the `status_updated` signal) rather than an
 unhandled exception taking the whole app down.
 
+## Troubleshooting
+
+- **"Could not connect to server"** — check that the TCP server is running
+  *and* that the port field matches the server's port exactly. The server
+  must be started first, in its own terminal, before clicking Start Plotting.
+
+- **PowerShell activation error on Windows** (`cannot be loaded because
+  running scripts is disabled on this system`) — run this once, in your
+  own user account (not as admin):
+
+      Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+
+  Then retry activating the virtual environment.
+
+- **`ModuleNotFoundError`** — confirm your virtual environment is activated
+  (prompt should show `(.venv)`) before running `pip install` or
+  `python main.py`. If it's not activated, activate it first
+
 ## How the code is organized (MVVM)
 
 - **`models/tcp_client_model.py`** — `TcpClientModel` owns the raw socket and is the only place that
