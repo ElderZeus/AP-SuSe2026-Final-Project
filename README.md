@@ -78,6 +78,11 @@ On Windows (PowerShell):
 
 ```
 .venv\Scripts\Activate.ps1
+
+If you get an error about scripts being disabled when activating on Windows,
+run this once in PowerShell (as your normal user, not admin):
+
+    Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
 ```
 
 You'll know it worked because your shell prompt will be prefixed with `(.venv)`.
